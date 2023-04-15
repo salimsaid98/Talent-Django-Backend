@@ -1,51 +1,54 @@
-from requests import request
+
 from rest_framework import serializers
-from django.contrib.auth.hashers import make_password
-from .models import Personal_Skills, Persosonal_Info,Education,Work_Experience,Skills,Personal_img
+from .models import  Application, Persosonal_Info,Employer,Education,Work_Experience,Skills,Specialization,TalentCategories,Talent
 from django.contrib.auth.models import User
         
 class Personal_InfoSerializer(serializers.ModelSerializer):
-    # password = serializers.CharField(write_only=True)
-    # def create(self, validated_data):
-    #      validated_data['password'] = make_password(validated_data['password'])
-    #      return super().create(validated_data)
-    
     class  Meta:
          model = Persosonal_Info
          fields = ('id','first_name','second_name','last_name','address','phone','dob','gender','user')
-        #  extra_kwargs = {
-        #         'image': {'required': False},
-        #     }
+         image = serializers.ImageField()
 
-    # image = serializers.ImageField()
+class EmployerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Employer
+        fields = ['company_name', 'industry', 'address', 'city', 'state', 'country', 'website', 'email', 'phone_number', 'contact_person','user']
+
          
 class Educationserializer(serializers.ModelSerializer):
     class  Meta:
         model = Education
-        fields = ('id','course_name','education_level','estart_date','eend_date','user')
+        fields = ('id','education_level','program','institution','estart_date','eend_date','user')
+
+class Skillsserializer(serializers.ModelSerializer):
+    class  Meta:
+        model = Skills
+        fields = ('id','skills_name','user')
+
+class Specializationserializer(serializers.ModelSerializer):
+    class  Meta:
+        model = Specialization
+        fields = ('id','specialization_name','user')
  
 class Work_Experienceserializer(serializers.ModelSerializer):
     class  Meta:
         model = Work_Experience
-        fields = ('id','company_name','position','wstart_date','wend_date','user')
-        
-class Skillsserializer(serializers.ModelSerializer):
+        fields = ('id','company_name','job_tittle','suppervisor_name','suppervisor_phone','wend_date','wstart_date','user')
+               
+class Talent_catserializer(serializers.ModelSerializer):
     class  Meta:
-        model = Skills
-        fields = ('id','skills_name')            
-        
-class Personal_imgserializer(serializers.ModelSerializer):
+        model = TalentCategories
+        fields = ('id','talent_cat_name')    
+
+class Talentserializer(serializers.ModelSerializer):
+    class  Meta:
+        model = Talent
+        fields = ('id','talent_name','talentCategories','employer','closing_date','duties_and_respo','qualification') 
+
+class ApplicationSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Personal_img
-        fields = ('id','image','bio','user')
-    image = serializers.ImageField()
-    # url= serializers.PrimaryKeyRelatedField(queryset=Persosonal_Info.objects.all())
-    
-# User Serializer
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ('id', 'username', 'email')
+        model = Application
+        fields = '__all__'   
 
 # Register Serializer
 class RegisterSerializer(serializers.ModelSerializer):
@@ -60,24 +63,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
     
 class UserSerializer(serializers.ModelSerializer):
-#     url = serializers.HyperlinkedIdentityField(
-#     view_name='user-detail',
-#     lookup_field='id',
-#     read_only=True,
-#     context={'request': request}  # Add this line
-# )
     class Meta:
         model=User
-        fields = ('id','username')
+        fields = ('id','username') 
         
-class Personal_Skillsserializer(serializers.ModelSerializer):
-    class  Meta:
-        model = Personal_Skills
-        fields = ('id','user','skill')   
-        
-# class UserSkillSerializer(serializers.ModelSerializer):
-#     skills_name = serializers.CharField()
-
-#     class Meta:
-#         model = User
-#         fields = ('id', 'skills_name')

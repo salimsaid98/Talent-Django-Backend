@@ -1,7 +1,10 @@
+from itertools import count
 from django.db.models import Q,F
 from django.contrib.auth import authenticate
+from django.http import JsonResponse
+from django.views import View
 from rest_framework import generics, status
-from django.forms import ValidationError
+from django.forms import ValidationError, model_to_dict
 from rest_framework.views import APIView
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
@@ -14,18 +17,20 @@ from rest_framework import permissions
 from rest_framework.authtoken.serializers import AuthTokenSerializer
 from knox.views import LoginView as KnoxLoginView
 from django.contrib.auth import login
-
-from .models import User,Education,Persosonal_Info,Skills,Work_Experience,Personal_img
-from .serializers import Educationserializer, Personal_Skillsserializer,RegisterSerializer,Personal_InfoSerializer, UserSerializer,Work_Experienceserializer,Skillsserializer,Personal_imgserializer
-from django.db import connection, models
-# # Create your views here.
-# class UserView(viewsets.ModelViewSet):
-#      queryset = User.objects.all()
-#      serializer_class = Userserializer
+from django.db import connection
+from rest_framework.response import Response
+from .models import Application, User,Employer,Education,Persosonal_Info,Skills,Work_Experience,Specialization,TalentCategories,Talent
+from .serializers import ApplicationSerializer, Educationserializer,EmployerSerializer,RegisterSerializer,Personal_InfoSerializer, UserSerializer,Work_Experienceserializer,Skillsserializer,Specializationserializer,Talent_catserializer,Talentserializer
+from django.db import connection
+from rest_framework.generics import RetrieveAPIView
 
 class Personal_InfoView(viewsets.ModelViewSet):
      queryset = Persosonal_Info.objects.all()
      serializer_class = Personal_InfoSerializer
+
+class EmployerView(viewsets.ModelViewSet):
+     queryset = Employer.objects.all()
+     serializer_class = EmployerSerializer
      
 class EducationView(viewsets.ModelViewSet):
      queryset = Education.objects.all()
@@ -38,26 +43,22 @@ class Work_ExperienceView(viewsets.ModelViewSet):
 class SkillsView(viewsets.ModelViewSet):
      queryset = Skills.objects.all()
      serializer_class = Skillsserializer
-     # filter_backends = [DjangoFilterBackend]
-     # filterset_fields = ['skills_name', 'skills_category']
-   
-class LiveSearchView(generics.ListAPIView):
-    serializer_class = Skillsserializer
-
-    def get_queryset(self):
-        query = self.request.query_params.get('q')
-        if query is not None:
-            return Skills.objects.filter(
-                Q(skills_name__icontains=query) |
-                Q(skills_category__icontains=query) 
-                
-            )
-        return Skills.objects.none()
-
-class Personal_imgView(viewsets.ModelViewSet):
-     queryset = Personal_img.objects.all()
-     serializer_class = Personal_imgserializer
      
+class SpecializtionView(viewsets.ModelViewSet):
+     queryset = Specialization.objects.all()
+     serializer_class = Specializationserializer 
+     
+class Talent_catView(viewsets.ModelViewSet):
+     queryset = TalentCategories.objects.all()
+     serializer_class = Talent_catserializer   
+     
+class TalentView(viewsets.ModelViewSet):
+     queryset = Talent.objects.all()
+     serializer_class = Talentserializer
+     
+class ApplicationView(viewsets.ModelViewSet):
+     queryset = Application.objects.all()
+     serializer_class = ApplicationSerializer
 
 # Register API
 class RegisterAPI(generics.GenericAPIView):
@@ -86,95 +87,266 @@ class LoginAPI(KnoxLoginView):
             'token': token,
         })
         
-        
-# get personal infos by passing foreign key
-# class UserInformationView(generics.RetrieveAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    lookup_field = 'id'
-
-    def get_user_data(self, request,user):
-        personal_info = Persosonal_Info.objects.get(user=user)
-        education = Education.objects.filter(user=user)
-        work_experience = Work_Experience.objects.filter(user=user)
-        # skills = Skills.objects.filter(user=user)
-
-        data = {
-        'personal_info': Personal_InfoSerializer(personal_info, context={'request': request}).data,
-        'education': Educationserializer(education, many=True, context={'request': request}).data,
-        'work_experience': Work_Experienceserializer(work_experience, many=True, context={'request': request}).data,
-        # 'skills': Skillsserializer(skills, many=True, context={'request': request}).data
-    }
-
-        return Response(data)
-    
-    def get(self, request, *args, **kwargs):
-        user = self.get_object()
-        return self.get_user_data(request, user)
-    
-class Personal_SkillsView(viewsets.ModelViewSet):
-     queryset = Skills.objects.all()
-     serializer_class = Personal_Skillsserializer
      
-class UserSkillsView(APIView):
+# Api for retrieve skills based on there foreign key 
+class SkillListAPIView(APIView):
+      def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id, skills_name  FROM `skills` WHERE user_id = %s", [id])
+            rows = cursor.fetchall()
+            if len(rows) > 0:
+                results = []
+                for row in rows:
+                    result = {
+                        'id': row[0],
+                        'skills_name': row[1],
+                    }
+                    results.append(result)
+                return Response(results)
+            else:
+                return Response({'detail': 'Skill not found'}, status=404)
+            
+# Api for retrieve specialization based on there foreign key 
+class SpecializationListAPIView(APIView):
+      def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id, specialization_name  FROM `specialization` WHERE user_id = %s", [id])
+            rows = cursor.fetchall()
+            if len(rows) > 0:
+                results = []
+                for row in rows:
+                    result = {
+                        'id': row[0],
+                        'specialization_name': row[1],
+                    }
+                    results.append(result)
+                return Response(results)
+            else:
+                return Response({'detail': 'Skill not found'}, status=404)
+            
+# Api for retrieve Eduvcation based on there foreign key 
+class EducationListAPIView(APIView):
+      def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id,education_level, institution ,program, estart_date, eend_date FROM education WHERE user_id  = %s", [id])
+            rows = cursor.fetchall()
+            if len(rows) > 0:
+                results = []
+                for row in rows:
+                    result = {
+                        'id': row[0],
+                        'education_level': row[1],
+                        'institution': row[2],
+                        'program': row[3],
+                        'estart_date': row[4],
+                        'eend_date': row[5],
+                    }
+                    results.append(result)
+                return Response(results)
+            else:
+                return Response({'detail': 'Education not found'}, status=404)
+# 
+class Work_ExperienceListAPIView(APIView):
+      def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id,company_name ,job_tittle, suppervisor_name, suppervisor_phone,wstart_date,wend_date FROM work_experience WHERE user_id = %s", [id])
+            rows = cursor.fetchall()
+            if len(rows) > 0:
+                results = []
+                for row in rows:
+                    result = {
+                        'id': row[0],
+                        'company_name': row[1],
+                        'job_tittle' : row[2],
+                        'suppervisor_name' : row[3],
+                        'suppervisor_phone' : row[4],
+                        'wstart_date': row[5],
+                        'wend_date': row[6],
+                    }
+                    results.append(result)
+                return Response(results)
+            else:
+                return Response({'detail': 'Work_Experience not found'}, status=404)
+ # 
+class Personal_infoListAPIView(APIView):
+      def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id,first_name,second_name,last_name,gender,address,dob,phone FROM persosonal_info WHERE user_id = %s", [id])
+            rows = cursor.fetchall()
+            if len(rows) > 0:
+                results = []
+                for row in rows:
+                    result = {
+                        'id': row[0],
+                        'first_name': row[1],
+                        'second_name': row[2],
+                        'last_name': row[3],
+                        'gender': row[4],
+                        'address': row[5],
+                        'dob': row[6],
+                        'phone': row[7],
+                    }
+                    results.append(result)
+                return Response(results)
+            else:
+                return Response({'detail': 'Personal_info not found'}, status=404)
+
+# Talent Categires By id With Employers 
+class TalentCatByIdAPIView(APIView):
+      def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT t.id,t.talent_name, t.closing_date, t.duties_and_respo, t.qualification, e.company_name FROM talent t INNER JOIN employers e ON e.id = t.employer_id WHERE t.talentCategories_id = %s", [id])
+            rows = cursor.fetchall()
+            if len(rows) > 0:
+                results = []
+                for row in rows:
+                    result = {
+                        'id': row[0],
+                        'talent_name': row[1],
+                        'closig_date': row[2],
+                        'duties_and_respo': row[3],
+                        'qualification': row[4],
+                        'company_name': row[5],
+                    }
+                    results.append(result)
+                return Response(results)
+            else:
+                return Response({'detail': 'Talent not found'}, status=404)
+            
+# Talent categories Count
+class TalentCategoryCountView(APIView):
     def get(self, request):
         with connection.cursor() as cursor:
-            cursor.execute("SELECT auth_user.id, auth_user.username, persosonal_info.first_name, persosonal_info.second_name, persosonal_info.last_name, persosonal_info.address, persosonal_info.phone, persosonal_info.dob, persosonal_info.gender, education.course_name, education.education_level, education.estart_date, education.eend_date, work_experience.company_name, work_experience.position, work_experience.wstart_date, work_experience.wend_date, GROUP_CONCAT(DISTINCT skills.skills_name SEPARATOR ', ') AS skills_list, work_experience.company_name FROM auth_user LEFT JOIN persosonal_info ON auth_user.id = persosonal_info.user_id LEFT JOIN education ON auth_user.id = education.user_id LEFT JOIN personal_skills ON auth_user.id = personal_skills.user_id LEFT JOIN skills ON personal_skills.skill_id = skills.id LEFT JOIN work_experience ON auth_user.id = work_experience.user_id GROUP BY auth_user.id HAVING COUNT(DISTINCT skills.skills_name) > 0;")
+            cursor.execute("""
+                SELECT tc.id, tc.talent_cat_name, COUNT(t.id) as talent_count
+                FROM talent_categries tc
+                LEFT JOIN talent t ON tc.id = t.talentCategories_id
+                GROUP BY tc.talent_cat_name;
+            """)
+            results = cursor.fetchall()
+
+        response_data = []
+        for row in results:
+            response_data.append({
+                'talent_category_id': row[0],
+                'talent_category_name': row[1],
+                'talent_count': row[2],
+            })
+
+        return Response(response_data)
+    
+
+class TalentByIdAPIView(APIView):
+      def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT t.id,t.talent_name, t.closing_date, t.duties_and_respo, t.qualification, e.company_name,e.id as employer FROM talent t INNER JOIN employers e ON e.id = t.employer_id WHERE t.id = %s", [id])
             rows = cursor.fetchall()
-            result = [
-                {
-                    'id': row[0],
-                    'username': row[1],
-                    'first_name': row[2],
-                    'second_name': row[3],
-                    'last_name': row[4],
-                    'address': row[5],
-                    'phone': row[6],
-                    'dob': row[7],
-                    'gender': row[8],
-                    'course_name': row[9],
-                    'education_level': row[10],
-                    'estart_date': row[11],
-                    'eend_date': row[12],
-                    'company_name': row[13],
-                    'position': row[14],
-                    'wstart_date': row[15],
-                    'wend_date': row[16],
-                    'skills_list': row[17],
-                } for row in rows
-            ]
-        return Response(result)
+            if len(rows) > 0:
+                results = []
+                for row in rows:
+                    result = {
+                        'id': row[0],
+                        'talent_name': row[1],
+                        'closig_date': row[2],
+                        'duties_and_respo': row[3],
+                        'qualification': row[4],
+                        'company_name': row[5],
+                        'employer':row[6]
+                    }
+                    results.append(result)
+                return Response(results)
+            else:
+                return Response({'detail': 'Talent not found'}, status=404)
+    
+    
+class TalentViewlist(APIView):
+     def get(self, request):
+        with connection.cursor() as cursor:
+                cursor.execute('SELECT t.id, t.talent_name, t.closing_date, t.duties_and_respo, t.qualification, e.company_name FROM talent t INNER JOIN employers e ON e.id = t.employer_id')
+                rows = cursor.fetchall()
+                if len(rows) > 0:
+                        results = []
+                        for row in rows:
+                            result = {
+                                'id': row[0],
+                                'talent_name': row[1],
+                                'closig_date': row[2],
+                                'duties_and_respo': row[3],
+                                'qualification': row[4],
+                                'company_name': row[5],
+                                
+                            }
+                            results.append(result)
+                        return Response(results)
+                else:
+                  return Response({'detail': 'Talent categories not found'}, status=404)
 
-from django.db import connection
-from rest_framework.views import APIView
-from rest_framework.response import Response
-
-class UserDetailView(APIView):
+class ApplicatntAPIView(APIView):
+      def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT u.id,u.username,t.talent_name,a.date_applied, a.status FROM auth_user u INNER JOIN application a ON u.id = a.user_id INNER JOIN talent t ON a.talent_id = t.id WHERE a.employer_id = %s", [id])
+            rows = cursor.fetchall()
+            if len(rows) > 0:
+                results = []
+                for row in rows:
+                    result = {
+                        'id': row[0],
+                        'username': row[1],
+                        'talent_name': row[2],
+                        'date_applied': row[3],
+                        'status': row[4],
+                    }
+                    results.append(result)
+                return Response(results)
+            else:
+                return Response({'detail': 'application not found'}, status=404)
+            
+class CV_StatusAPIView(APIView):
     def get(self, request, id):
         with connection.cursor() as cursor:
-            cursor.execute("SELECT auth_user.id, auth_user.username, persosonal_info.first_name, persosonal_info.second_name, persosonal_info.last_name, persosonal_info.address, persosonal_info.phone, persosonal_info.dob, persosonal_info.gender, education.course_name, education.education_level, education.estart_date, education.eend_date, work_experience.company_name, work_experience.position, work_experience.wstart_date, work_experience.wend_date, GROUP_CONCAT(DISTINCT skills.skills_name SEPARATOR ', ') AS skills_list FROM auth_user LEFT JOIN persosonal_info ON auth_user.id = persosonal_info.user_id LEFT JOIN education ON auth_user.id = education.user_id LEFT JOIN personal_skills ON auth_user.id = personal_skills.user_id LEFT JOIN skills ON personal_skills.skill_id = skills.id LEFT JOIN work_experience ON auth_user.id = work_experience.user_id WHERE auth_user.id = %s", [id])
-            row = cursor.fetchone()
-            if row is not None:
-                result = {
-                    'id': row[0],
-                    'username': row[1],
-                    'first_name': row[2],
-                    'second_name': row[3],
-                    'last_name': row[4],
-                    'address': row[5],
-                    'phone': row[6],
-                    'dob': row[7],
-                    'gender': row[8],
-                    'course_name': row[9],
-                    'education_level': row[10],
-                    'estart_date': row[11],
-                    'eend_date': row[12],
-                    'company_name': row[13],
-                    'position': row[14],
-                    'wstart_date': row[15],
-                    'wend_date': row[16],
-                    'skills_list': row[17],
-                }
+            cursor.execute("""
+                SELECT 
+                    CASE 
+                        WHEN EXISTS (SELECT 1 FROM persosonal_info WHERE user_id = %s) AND
+                             EXISTS (SELECT 1 FROM education WHERE user_id = %s) AND
+                             EXISTS (SELECT 1 FROM work_experience WHERE user_id = %s) AND
+                             EXISTS (SELECT 1 FROM skills WHERE user_id = %s) AND
+                             EXISTS (SELECT 1 FROM specialization WHERE user_id = %s)
+                        THEN 'Complete'
+                        ELSE 'Incomplete'
+                    END AS cv_status
+                """, [id, id, id, id, id])
+            rows = cursor.fetchall()
+            if len(rows) > 0:
+                result = {'cv_status': rows[0][0]}
                 return Response(result)
             else:
-                return Response({'detail': 'User not found'}, status=404)
+                return Response({'detail': 'cv not found'}, status=404)
+# user application list
+class User_ApplicationList(APIView):
+    def get(self, request, id):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id, status, date_applied, talent_id, user_id, employer_id FROM application WHERE user_id = %s", [id])
+            results = cursor.fetchall()
+            data = [{'id': row[0], 'status': row[1], 'date_applied': row[2], 'talent_id': row[3], 'user_id': row[4], 'employer_id': row[5]} for row in results]
+        return Response(data)
+    
+class User_Application_Status(APIView):
+        def get(self,request, id):
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT application.id, application.status, application.date_applied, application.talent_id, 
+                    application.user_id, application.employer_id, talent.talent_name 
+                    FROM application application 
+                    INNER JOIN talent talent on talent.id = application.talent_id 
+                    WHERE application.user_id = %s""", [id])
+                applications = cursor.fetchall()
+                data = [{'id': app[0],
+                            'status': app[1],
+                            'date_applied': app[2],
+                            'talent_id': app[3], 
+                            'user_id': app[4], 
+                            'employer_id': app[5],
+                            'talent_name': app[6]} 
+                            for app in applications]
+                return Response(data)
